@@ -1,36 +1,70 @@
 /**
- * Supabase クライアント（後で実装）
- * 現時点ではプレースホルダー。第2ステップで完成させる。
+ * Supabase クライアント & 保存処理
+ *
+ * テーブル: crowdworks_jobs
+ * - 同じURLの案件が再スクレイプされたら上書き（upsert）
+ * - 新規案件だけ is_new = true になる
  */
 
-// npm install @supabase/supabase-js を実行後に有効化
-// const { createClient } = require("@supabase/supabase-js");
+const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-// let supabase = null;
-// if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-//   supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-// }
+function getClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    return null;
+  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+}
 
 /**
- * 案件データをSupabaseのcrowdworks_jobsテーブルに保存する
+ * 案件データをSupabaseに保存する
  * @param {Array} jobs  scrapeMultipleKeywords() が返すオブジェクト配列
+ * @returns {{ saved: number, skipped: number }}
  */
 async function saveJobs(jobs) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    console.log("[DB] Supabase未設定のためスキップ（.envを確認してください）");
+  const supabase = getClient();
+
+  if (!supabase) {
+    console.log("[DB] ⚠️  SUPABASE_URL / SUPABASE_SERVICE_KEY が未設定のためスキップ");
     return { saved: 0, skipped: jobs.length };
   }
 
-  // TODO: 第2ステップで実装
-  // const { data, error } = await supabase
-  //   .from("crowdworks_jobs")
-  //   .upsert(jobs, { onConflict: "url" });
+  // Supabaseのテーブルカラム名に合わせて整形
+  const rows = jobs.map((job) => ({
+    job_id:          job.id,
+    title:           job.title,
+    url:             job.url,
+    description:     job.description,
+    category_id:     job.category_id,
+    skills:          job.skills,            // text[] 配列
+    status:          job.status,
+    expired_on:      job.expired_on,
+    last_released_at: job.last_released_at,
+    payment_type:    job.payment?.type ?? null,
+    payment_min:     job.payment?.min ?? null,
+    payment_max:     job.payment?.max ?? null,
+    keyword:         job.keyword,
+    scraped_at:      job.scrapedAt,
+    is_new:          true,                  // あとでLINE通知フィルターに使う
+  }));
 
-  console.log(`[DB] ${jobs.length}件をSupabaseに保存予定（未実装）`);
-  return { saved: 0, skipped: jobs.length };
+  // urlを一意キーにしてupsert（同じ案件は上書き、新規は追加）
+  const { data, error } = await supabase
+    .from("crowdworks_jobs")
+    .upsert(rows, {
+      onConflict: "url",
+      ignoreDuplicates: false,
+    });
+
+  if (error) {
+    console.error("[DB] ❌ 保存エラー:", error.message);
+    return { saved: 0, skipped: jobs.length };
+  }
+
+  console.log(`[DB] ✅ ${rows.length}件をSupabaseに保存しました`);
+  return { saved: rows.length, skipped: 0 };
 }
 
 module.exports = { saveJobs };

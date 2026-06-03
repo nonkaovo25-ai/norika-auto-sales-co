@@ -9,6 +9,7 @@
     "scrape": "node src/index.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
     "axios": "^1.7.2",
     "axios-retry": "^4.4.0",
     "cheerio": "^1.0.0",
