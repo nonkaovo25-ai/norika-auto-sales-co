@@ -7,6 +7,7 @@
  */
 
 const { createClient } = require("@supabase/supabase-js");
+const ws = require("ws");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -22,6 +23,7 @@ function getClient() {
         autoRefreshToken: false,
       },
       realtime: {
+        transport: ws,
         params: { eventsPerSecond: 0 },
       },
     });
