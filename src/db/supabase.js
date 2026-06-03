@@ -15,7 +15,20 @@ function getClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return null;
   }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  try {
+    return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+      realtime: {
+        params: { eventsPerSecond: 0 },
+      },
+    });
+  } catch (e) {
+    console.error("[DB] Supabaseクライアント初期化エラー:", e.message);
+    return null;
+  }
 }
 
 /**
@@ -24,7 +37,13 @@ function getClient() {
  * @returns {{ saved: number, skipped: number }}
  */
 async function saveJobs(jobs) {
-  const supabase = getClient();
+  let supabase;
+  try {
+    supabase = getClient();
+  } catch (e) {
+    console.error("[DB] クライアント取得エラー:", e.message);
+    return { saved: 0, skipped: jobs.length };
+  }
 
   if (!supabase) {
     console.log("[DB] ⚠️  SUPABASE_URL / SUPABASE_SERVICE_KEY が未設定のためスキップ");
