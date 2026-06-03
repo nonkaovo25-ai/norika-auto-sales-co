@@ -1,0 +1,37 @@
+name: クラウドワークス 自動スクレイプ
+
+on:
+  # ─── 定期実行: 6時間ごと（UTC）───────────────────────────────
+  # UTC 0:00 / 6:00 / 12:00 / 18:00 = JST 9:00 / 15:00 / 21:00 / 3:00
+  schedule:
+    - cron: "0 0,6,12,18 * * *"
+
+  # ─── GitHubの画面から手動実行もできる ────────────────────────
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: スクレイプ実行
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js 20 をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: 依存パッケージをインストール
+        run: npm ci
+
+      - name: スクレイプ実行
+        run: node src/index.js
+        env:
+          RUN_ONCE: "true"
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PAGES_PER_KEYWORD: "1"
