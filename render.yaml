@@ -1,0 +1,17 @@
+services:
+  - type: worker          # cronやバックグラウンド処理に最適（Web serverより安価）
+    name: norika-auto-sales
+    runtime: node
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false       # Renderダッシュボードで手動設定
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CRON_SCHEDULE
+        value: "0 */6 * * *"
+      - key: PAGES_PER_KEYWORD
+        value: "1"
