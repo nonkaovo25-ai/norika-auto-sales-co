@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>株式会社NORIKA — 案件マッチング</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f0f0f;
+      --surface:  #1a1a1a;
+      --border:   #2a2a2a;
+      --text:     #f0f0f0;
+      --muted:    #888;
+      --accent:   #7c6aff;
+      --good:     #22c55e;
+      --bad:      #ef4444;
+      --warning:  #f59e0b;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    /* ─── ヘッダー ─── */
+    header {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; color: var(--text); }
+    .stats { display: flex; gap: 16px; font-size: 12px; }
+    .stat-good { color: var(--good); }
+    .stat-bad  { color: var(--bad); }
+
+    /* ─── プログレスバー ─── */
+    .progress-wrap {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .progress-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .progress-text { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+    /* ─── カード ─── */
+    .card-wrap {
+      width: 100%;
+      max-width: 480px;
+      position: relative;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+    .card.slide-right { transform: translateX(60px); opacity: 0; }
+    .card.slide-left  { transform: translateX(-60px); opacity: 0; }
+
+    .card-header {
+      padding: 20px 20px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .badge-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .badge-good    { border-color: var(--good); color: var(--good); }
+    .badge-neutral { border-color: var(--warning); color: var(--warning); }
+    .badge-bad     { border-color: var(--bad); color: var(--bad); }
+
+    .card-body { padding: 16px 20px; }
+
+    /* AI スコアバー */
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .score-label { font-size: 11px; color: var(--muted); }
+    .score-num   { font-size: 12px; font-weight: 700; }
+    .score-bar   { height: 5px; background: var(--border); border-radius: 3px; margin-bottom: 6px; }
+    .score-fill  { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+    .score-reason { font-size: 11px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+
+    /* 単価・スキル */
+    .payment { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+    .payment-label { font-size: 11px; color: var(--muted); font-weight: 400; margin-right: 6px; }
+    .skills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .skill-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #252525;
+      color: var(--muted);
+    }
+
+    /* 本文 */
+    .description {
+      font-size: 13px;
+      color: #aaa;
+      line-height: 1.7;
+      background: #141414;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    /* 詳細リンク */
+    .detail-link {
+      display: block;
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      margin-bottom: 16px;
+    }
+    .detail-link:hover { text-decoration: underline; }
+
+    /* ─── ボタン ─── */
+    .btn-row { display: flex; gap: 12px; }
+    .btn {
+      flex: 1;
+      padding: 15px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      border: none;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-bad  { background: transparent; border: 1px solid var(--bad);  color: var(--bad); }
+    .btn-good { background: var(--accent); color: #fff; }
+
+    .shortcut-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    /* ─── セットアップ画面 ─── */
+    #setup-screen {
+      width: 100%;
+      max-width: 420px;
+      display: none;
+    }
+    #setup-screen h2 { font-size: 18px; margin-bottom: 8px; }
+    #setup-screen p  { font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: monospace;
+    }
+    .form-group input:focus { outline: none; border-color: var(--accent); }
+    .btn-setup {
+      width: 100%;
+      padding: 13px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .setup-error { font-size: 12px; color: var(--bad); margin-top: 8px; display: none; }
+
+    /* ─── 完了画面 ─── */
+    #done-screen {
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      display: none;
+    }
+    #done-screen h2 { font-size: 20px; margin-bottom: 8px; }
+    #done-screen p  { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+    .done-stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 28px; }
+    .done-stat-num { font-size: 36px; font-weight: 700; }
+
+    /* ─── ローディング ─── */
+    #loading { font-size: 13px; color: var(--muted); display: none; }
+    #main-screen { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- セットアップ画面 -->
+<div id="setup-screen">
+  <h2>案件マッチング 初期設定</h2>
+  <p>SupabaseのURLとPublishable Keyを入力してください。<br>入力内容はこのブラウザにのみ保存されます。</p>
+  <div class="form-group">
+    <label>SUPABASE URL</label>
+    <input id="input-url" type="text" placeholder="https://xxxxxxxxxxxx.supabase.co">
+  </div>
+  <div class="form-group">
+    <label>PUBLISHABLE KEY（sb_publishable_... で始まるキー）</label>
+    <input id="input-key" type="text" placeholder="sb_publishable_...">
+  </div>
+  <button class="btn-setup" onclick="setupSupabase()">接続する</button>
+  <div id="setup-error" class="setup-error">接続できませんでした。URLとキーを確認してください。</div>
+</div>
+
+<!-- ローディング -->
+<div id="loading">読み込み中...</div>
+
+<!-- メイン画面 -->
+<div id="main-screen">
+  <header>
+    <span class="logo">株式会社NORIKA</span>
+    <div class="stats">
+      <span class="stat-good" id="stat-good">✓ 0</span>
+      <span class="stat-bad"  id="stat-bad">✕ 0</span>
+    </div>
+  </header>
+
+  <div class="progress-wrap">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+    <span class="progress-text" id="progress-text">0 / 0</span>
+  </div>
+
+  <div class="card-wrap">
+    <div class="card" id="job-card">
+      <div class="card-header">
+        <div class="card-title" id="job-title">—</div>
+        <div class="badge-row">
+          <span class="badge" id="ai-badge">AI: —</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="score-row">
+          <span class="score-label">AI スコア</span>
+          <span class="score-num" id="score-num">—</span>
+        </div>
+        <div class="score-bar"><div class="score-fill" id="score-fill" style="width:0%"></div></div>
+        <div class="score-reason" id="score-reason">—</div>
+
+        <div class="payment">
+          <span class="payment-label">単価</span>
+          <span id="job-payment">—</span>
+        </div>
+        <div class="skills" id="job-skills"></div>
+        <div class="description" id="job-description">—</div>
+        <a class="detail-link" id="job-link" href="#" target="_blank" rel="noopener">クラウドワークスで詳細を見る →</a>
+
+        <div class="btn-row">
+          <button class="btn btn-bad"  onclick="verdict('bad')">✕ 地雷</button>
+          <button class="btn btn-good" onclick="verdict('good')">✓ 良い</button>
+        </div>
+        <div class="shortcut-hint">← 地雷 / 良い →（キーボード操作可）</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 完了画面 -->
+<div id="done-screen">
+  <h2>お疲れ様でした</h2>
+  <p>判定結果がAIの学習データになります</p>
+  <div class="done-stats">
+    <div>
+      <div class="done-stat-num stat-good" id="done-good">0</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">良い案件</div>
+    </div>
+    <div>
+      <div class="done-stat-num stat-bad" id="done-bad">0</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">地雷案件</div>
+    </div>
+  </div>
+  <button class="btn-setup" onclick="location.reload()">もう一度見る</button>
+</div>
+
+<script>
+  let supabase = null;
+  let jobs = [];
+  let currentIndex = 0;
+  let goodCount = 0;
+  let badCount  = 0;
+
+  // ─── 初期化 ─────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    const savedUrl = localStorage.getItem('sb_url');
+    const savedKey = localStorage.getItem('sb_key');
+
+    if (savedUrl && savedKey) {
+      initSupabase(savedUrl, savedKey);
+    } else {
+      show('setup-screen');
+    }
+  });
+
+  // ─── Supabase 接続 ───────────────────────────────────────────
+  function setupSupabase() {
+    const url = document.getElementById('input-url').value.trim();
+    const key = document.getElementById('input-key').value.trim();
+    if (!url || !key) return;
+    localStorage.setItem('sb_url', url);
+    localStorage.setItem('sb_key', key);
+    initSupabase(url, key);
+  }
+
+  async function initSupabase(url, key) {
+    show('loading');
+    try {
+      supabase = window.supabase.createClient(url, key);
+      await loadJobs();
+    } catch(e) {
+      document.getElementById('setup-error').style.display = 'block';
+      show('setup-screen');
+    }
+  }
+
+  // ─── 案件ロード ───────────────────────────────────────────────
+  async function loadJobs() {
+    // 既に判定済みのjob_idを取得
+    const { data: feedbacks } = await supabase
+      .from('user_feedback')
+      .select('job_id');
+    const reviewedIds = new Set((feedbacks ?? []).map(f => f.job_id));
+
+    // AI判定済み案件を取得（goodを優先して全件取得）
+    const { data, error } = await supabase
+      .from('crowdworks_jobs')
+      .select('id, title, url, description, payment_type, payment_min, payment_max, skills, ai_score, ai_verdict, ai_reason')
+      .gte('ai_score', 5)
+      .order('ai_score', { ascending: false })
+      .limit(200);
+
+    if (error) throw error;
+
+    // 未判定のみに絞る
+    jobs = (data ?? []).filter(j => !reviewedIds.has(j.id));
+
+    if (jobs.length === 0) {
+      show('done-screen');
+      return;
+    }
+
+    show('main-screen');
+    renderJob();
+  }
+
+  // ─── カード描画 ───────────────────────────────────────────────
+  function renderJob() {
+    const job = jobs[currentIndex];
+    if (!job) {
+      showDone();
+      return;
+    }
+
+    const total = jobs.length;
+    const done  = currentIndex;
+    document.getElementById('progress-fill').style.width = `${(done / total) * 100}%`;
+    document.getElementById('progress-text').textContent = `${done} / ${total}`;
+
+    document.getElementById('job-title').textContent = job.title;
+    document.getElementById('job-link').href = job.url;
+    document.getElementById('job-description').textContent =
+      (job.description ?? '').slice(0, 400) + ((job.description ?? '').length > 400 ? '...' : '');
+
+    // 単価
+    const payText = formatPayment(job);
+    document.getElementById('job-payment').textContent = payText;
+
+    // スキル
+    const skillsEl = document.getElementById('job-skills');
+    skillsEl.innerHTML = '';
+    (job.skills ?? []).slice(0, 6).forEach(s => {
+      const tag = document.createElement('span');
+      tag.className = 'skill-tag';
+      tag.textContent = s;
+      skillsEl.appendChild(tag);
+    });
+
+    // AI スコア
+    const score   = job.ai_score ?? 0;
+    const verdict = job.ai_verdict ?? 'neutral';
+    const badgeEl = document.getElementById('ai-badge');
+    badgeEl.textContent = `AI: ${verdict}`;
+    badgeEl.className = `badge badge-${verdict}`;
+
+    document.getElementById('score-num').textContent = `${score} / 10`;
+    const fill = document.getElementById('score-fill');
+    fill.style.width  = `${score * 10}%`;
+    fill.style.background = score >= 7 ? 'var(--good)' : score >= 4 ? 'var(--warning)' : 'var(--bad)';
+
+    document.getElementById('score-reason').textContent = job.ai_reason ?? '';
+  }
+
+  // ─── 判定 ─────────────────────────────────────────────────────
+  async function verdict(v) {
+    const job = jobs[currentIndex];
+    if (!job) return;
+
+    // アニメーション
+    const card = document.getElementById('job-card');
+    card.classList.add(v === 'good' ? 'slide-right' : 'slide-left');
+
+    if (v === 'good') { goodCount++; } else { badCount++; }
+    document.getElementById('stat-good').textContent = `✓ ${goodCount}`;
+    document.getElementById('stat-bad').textContent  = `✕ ${badCount}`;
+
+    // Supabaseに保存
+    supabase.from('user_feedback').insert({ job_id: job.id, verdict: v }).then(() => {});
+
+    setTimeout(() => {
+      card.classList.remove('slide-right', 'slide-left');
+      currentIndex++;
+      renderJob();
+    }, 250);
+  }
+
+  function showDone() {
+    document.getElementById('done-good').textContent = goodCount;
+    document.getElementById('done-bad').textContent  = badCount;
+    show('done-screen');
+  }
+
+  // ─── キーボード操作 ──────────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') verdict('good');
+    if (e.key === 'ArrowLeft')  verdict('bad');
+  });
+
+  // ─── ヘルパー ─────────────────────────────────────────────────
+  function show(id) {
+    ['setup-screen', 'loading', 'main-screen', 'done-screen'].forEach(s => {
+      document.getElementById(s).style.display = s === id ? (id === 'loading' ? 'block' : 'flex') : 'none';
+    });
+    if (id === 'setup-screen') document.getElementById('setup-screen').style.display = 'block';
+    if (id === 'done-screen')  document.getElementById('done-screen').style.display  = 'block';
+    if (id === 'main-screen')  document.getElementById('main-screen').style.display  = 'flex';
+  }
+
+  function formatPayment(job) {
+    if (job.payment_type === 'fixed') {
+      const min = job.payment_min ? job.payment_min.toLocaleString() : '?';
+      const max = job.payment_max ? job.payment_max.toLocaleString() : '?';
+      return `${min}〜${max}円（固定）`;
+    }
+    if (job.payment_type === 'hourly') {
+      return `時給 ${job.payment_min ?? '?'}〜${job.payment_max ?? '?'}円`;
+    }
+    return '金額未記載';
+  }
+</script>
+</body>
+</html>
