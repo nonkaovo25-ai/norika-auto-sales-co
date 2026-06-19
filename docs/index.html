@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>株式会社NORIKA — 案件マッチング</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -360,10 +360,10 @@
   async function initSupabase(url, key) {
     show('loading');
     try {
-      // supabaseのCDNグローバル変数名を両方試す
-      const sb = window.supabase || window.supabaseJs;
-      if (!sb) throw new Error('Supabase CDN未ロード');
-      supabase = sb.createClient(url, key);
+      // UMDビルドは window.supabase.createClient として露出される
+      const sbLib = window.supabase;
+      if (!sbLib || !sbLib.createClient) throw new Error('Supabase CDN未ロード。ページをリロードしてください。');
+      supabase = sbLib.createClient(url, key);
       await loadJobs();
     } catch(e) {
       console.error('接続エラー:', e);
