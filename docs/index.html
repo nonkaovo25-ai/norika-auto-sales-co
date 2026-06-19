@@ -360,9 +360,14 @@
   async function initSupabase(url, key) {
     show('loading');
     try {
-      supabase = window.supabase.createClient(url, key);
+      // supabaseのCDNグローバル変数名を両方試す
+      const sb = window.supabase || window.supabaseJs;
+      if (!sb) throw new Error('Supabase CDN未ロード');
+      supabase = sb.createClient(url, key);
       await loadJobs();
     } catch(e) {
+      console.error('接続エラー:', e);
+      document.getElementById('setup-error').textContent = '接続エラー: ' + e.message;
       document.getElementById('setup-error').style.display = 'block';
       show('setup-screen');
     }
@@ -370,21 +375,33 @@
 
   // ─── 案件ロード ───────────────────────────────────────────────
   async function loadJobs() {
-    // 既に判定済みのjob_idを取得
-    const { data: feedbacks } = await supabase
-      .from('user_feedback')
-      .select('job_id');
-    const reviewedIds = new Set((feedbacks ?? []).map(f => f.job_id));
+    // 既に判定済みのjob_idを取得（テーブルがなくてもOK）
+    let reviewedIds = new Set();
+    try {
+      const { data: feedbacks } = await supabase
+        .from('user_feedback')
+        .select('job_id');
+      reviewedIds = new Set((feedbacks ?? []).map(f => f.job_id));
+    } catch(e) { /* user_feedbackテーブル未作成でもスキップ */ }
 
-    // AI判定済み案件を取得（goodを優先して全件取得）
-    const { data, error } = await supabase
+    // 案件を取得（AI判定済み優先、なければ全件）
+    let { data, error } = await supabase
       .from('crowdworks_jobs')
       .select('id, title, url, description, payment_type, payment_min, payment_max, skills, ai_score, ai_verdict, ai_reason')
-      .gte('ai_score', 5)
-      .order('ai_score', { ascending: false })
+      .order('ai_score', { ascending: false, nullsFirst: false })
       .limit(200);
 
-    if (error) throw error;
+    // ai_scoreがない場合は全件取得
+    if (!data || data.length === 0) {
+      const res = await supabase
+        .from('crowdworks_jobs')
+        .select('id, title, url, description, payment_type, payment_min, payment_max, skills, ai_score, ai_verdict, ai_reason')
+        .limit(200);
+      data = res.data;
+      error = res.error;
+    }
+
+    if (error) throw new Error('データ取得失敗: ' + error.message);
 
     // 未判定のみに絞る
     jobs = (data ?? []).filter(j => !reviewedIds.has(j.id));
