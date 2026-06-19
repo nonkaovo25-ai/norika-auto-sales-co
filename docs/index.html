@@ -187,7 +187,7 @@
     #setup-screen {
       width: 100%;
       max-width: 420px;
-      display: none;
+      display: block;
     }
     #setup-screen h2 { font-size: 18px; margin-bottom: 8px; }
     #setup-screen p  { font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
@@ -333,12 +333,16 @@
 
   // ─── 初期化 ─────────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
-    const savedUrl = localStorage.getItem('sb_url');
-    const savedKey = localStorage.getItem('sb_key');
-
-    if (savedUrl && savedKey) {
-      initSupabase(savedUrl, savedKey);
-    } else {
+    try {
+      const savedUrl = localStorage.getItem('sb_url');
+      const savedKey = localStorage.getItem('sb_key');
+      if (savedUrl && savedKey) {
+        show('loading');
+        initSupabase(savedUrl, savedKey);
+      } else {
+        show('setup-screen');
+      }
+    } catch(e) {
       show('setup-screen');
     }
   });
