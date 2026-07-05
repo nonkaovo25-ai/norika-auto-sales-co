@@ -371,14 +371,27 @@
   });
 
   // ─── Supabase 接続 ───────────────────────────────────────────
+  // ダッシュボードのURL（supabase.com/dashboard/project/xxxx/...）を
+  // 間違って貼った場合に、正しいプロジェクトURL（xxxx.supabase.co）へ自動修正する
+  function normalizeSupabaseUrl(raw) {
+    const m = raw.match(/supabase\.com\/dashboard\/project\/([a-zA-Z0-9]+)/);
+    if (m) return `https://${m[1]}.supabase.co`;
+    return raw.replace(/\/+$/, ''); // 末尾スラッシュ除去
+  }
+
   function setupSupabase() {
     const urlEl = document.getElementById('input-url');
     const keyEl = document.getElementById('input-key');
-    const url = (urlEl.value || '').trim();
+    const url = normalizeSupabaseUrl((urlEl.value || '').trim());
     const key = (keyEl.value || '').trim();
     const errEl = document.getElementById('setup-error');
     if (!url || !key) {
       errEl.textContent = 'URLとKEYの両方を入力してください。';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (!/^https:\/\/[a-zA-Z0-9]+\.supabase\.co$/.test(url)) {
+      errEl.textContent = 'URLの形式が正しくありません。例: https://xxxxxxxx.supabase.co';
       errEl.style.display = 'block';
       return;
     }
@@ -398,7 +411,7 @@
       await loadJobs();
     } catch(e) {
       console.error('接続エラー:', e);
-      document.getElementById('setup-error').textContent = '接続エラー: ' + e.message;
+      document.getElementById('setup-error').textContent = '接続エラー: ' + (e.message || e);
       document.getElementById('setup-error').style.display = 'block';
       show('setup-screen');
     }
