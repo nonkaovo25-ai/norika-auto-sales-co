@@ -17,29 +17,23 @@ const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ─── NORIKAさんのプロフィール（ここを育てていく）──────────────
 const NORIKA_PROFILE = `
-【NORIKAさんのスキル・得意なこと】
-- GAS（Google Apps Script）: 業務自動化、スプレッドシート連携
-- Python: スクレイピング、自動化スクリプト
-- Web開発: HTML/CSS/JavaScript、LP制作、WordPress
-- Excel/スプレッドシート マクロ
-- Node.js: スクレイピング、API連携
-- Cursor（AI）を使ったコーディング
+【NORIKAさんの得意分野・やりたいこと】
+- 台本作成（YouTube・SNS・動画用のシナリオ、構成、原稿）
+- GAS（Google Apps Script）による業務自動化
+- Python（スクレイピング・自動化スクリプト）
+- Web開発（HTML/CSS/JavaScript、LP制作、WordPress）
+- Node.js（スクレイピング・API連携）
+- Cursor などAIツールを活用した開発・自動化
 
-【好きな案件の特徴】
-- 技術系（コーディング、自動化、開発）
-- 在宅・リモートで完結する
-- 単価が明確で適切（固定5万円以上、時給2000円以上が理想）
-- 依頼内容が具体的で明確
-- スキルアップにつながる
+【絶対にやりたくない・NGな条件（1つでも該当したら大きく減点）】
+- 電話業務・テレアポ・対面必須の案件
+- 翻訳案件（「翻訳」「英訳」「和訳」「English」などのキーワードを含む）
+- 単純データ入力・コピペ作業（スキル不要の集計・入力のみの案件）
 
-【絶対避けたい地雷案件】
-- 営業代行・テレアポ・飛び込み営業
-- MLM・ネットワークビジネス的な曖昧な案件
-- 「未経験OK」「誰でもできる」系の低単価量産作業
-- 謝礼・インタビュー・アンケート系（数百〜数千円）
-- 撮影・出演・モデル系
-- 単価が極端に低い（固定1万円以下、時給1000円以下）
-- 詳細が著しく少なくて怪しい案件
+【単価の基準（payment_typeごとに判定）】
+- fixed（固定）  : payment_max が 50000円以上なら加点 / 10000円以下なら大幅減点
+- hourly（時給） : payment_max が 2000円以上なら加点 / 1000円以下なら大幅減点
+- writing / task : payment_max が 1000円未満なら大幅減点
 `;
 
 /**
@@ -54,11 +48,13 @@ async function judgeJob(job) {
   }
 
   const payText = formatPayment(job.payment);
+  const payType = job.payment?.type ?? "unknown";
+  const payMax = getMaxPayment(job.payment);
   const skillText = job.skills?.length ? job.skills.join(", ") : "記載なし";
 
   const prompt = `
-あなたはフリーランスのキャリアアドバイザーです。
-以下のフリーランサーのプロフィールをもとに、クラウドワークスの案件を評価してください。
+あなたはフリーランス「NORIKAさん」専属のキャリアアドバイザーです。
+以下のプロフィールと判定ルールに厳密に従って、クラウドワークスの案件を評価してください。
 
 ${NORIKA_PROFILE}
 
@@ -66,19 +62,44 @@ ${NORIKA_PROFILE}
 
 【評価する案件】
 タイトル: ${job.title}
-単価: ${payText}
+payment_type: ${payType}
+payment_max: ${payMax != null ? `${payMax}円` : "不明"}
+単価（表示用）: ${payText}
 スキル: ${skillText}
 本文:
 ${job.description?.slice(0, 800) ?? "（本文なし）"}
 
 ---
 
-以下のJSON形式のみで回答してください（他のテキスト不要）:
+【スコアリング方針】0〜10点で採点し、次のレンジに従うこと:
+- 8〜10点: かなりおすすめ（得意分野に合致＆単価も良好）
+- 5〜7点 : 検討の余地あり
+- 3〜4点 : 優先度低め
+- 0〜2点 : 明確に地雷／対象外
+
+【絶対NG条件】次のいずれかに該当する場合は、内容に関わらず score を 0〜2、verdict を "bad" にすること:
+- 「電話」「コール」「テレアポ」「対面」など、電話・対面コミュニケーションを強く要求する表現がある
+- 「翻訳」「英訳」「和訳」「English」など、翻訳案件だと明確に分かるキーワードが含まれる
+- 「簡単に稼げる」「誰でもできる」「未経験OKで高収入」「スキル不要」「副業で月収◯万円」等の誇大な表現がある
+- LINE・メールなど、クラウドワークス外への連絡を最初から求めている
+- SNSのフォロワー購入・水増し、口コミの虚偽投稿など、規約・法律に触れる可能性がある業務
+- MLM・ネットワークビジネス・情報商材関連
+- 業務内容の説明が極端に少なく、「採用後に詳細説明」等としか書かれていない
+- 単価の大幅減点条件に該当する（fixed:10000円以下 / hourly:1000円以下 / writing・task:1000円未満）
+
+【加点（得意分野とのマッチ度を強く反映）】
+- 「台本」「シナリオ」「構成」「原稿」を含み、内容・単価が常識的であれば score を +2〜+3 ブーストする
+- GAS / Python / Web開発 / Node.js 関連の開発案件で、単価が理にかなっていれば 7〜10点レンジに入りやすくする
+
+---
+
+以下のJSON形式のみで回答してください（他のテキストは一切不要）:
 {
-  "score": 0から10の整数（10が最高・最もNORIKAさんに向いている）,
-  "verdict": "good" または "neutral" または "bad",
-  "reason": "判定理由を日本語で1〜2文で",
-  "tags": ["特徴タグ1", "特徴タグ2"]  // 例: ["技術系", "高単価", "リモート可", "地雷疑い"]
+  "score": 0から10の整数,
+  "verdict": "good"（8点以上）/ "neutral"（3〜7点）/ "bad"（0〜2点）,
+  "reason": "なぜその点数か・どの条件に合致/違反したかを2〜3文の簡潔な日本語で",
+  "tags": ["該当するスネークケースのラベル"]
+  // 使えるタグ例: "scenario","gas","python","web-dev","node","ai-tool","low-pay","phone-required","translation","simple-data-entry"
 }
 `;
 
@@ -87,7 +108,7 @@ ${job.description?.slice(0, 800) ?? "（本文なし）"}
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.3,
-      max_tokens: 300,
+      max_tokens: 400,
       response_format: { type: "json_object" },
     });
 
@@ -165,6 +186,14 @@ function formatPayment(payment) {
   if (payment.type === "writing") return `記事単価 ${payment.article_price}円`;
   if (payment.type === "task")    return `タスク単価 ${payment.task_price}円`;
   return "不明";
+}
+
+// payment_max 相当の金額を取り出す（task/writingは専用フィールドを使う）
+function getMaxPayment(payment) {
+  if (!payment) return null;
+  if (payment.type === "task")    return payment.task_price ?? null;
+  if (payment.type === "writing") return payment.article_price ?? null;
+  return payment.max ?? null;
 }
 
 function sleep(ms) {

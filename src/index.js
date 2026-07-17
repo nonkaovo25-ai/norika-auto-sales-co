@@ -8,6 +8,7 @@ const cron = require("node-cron");
 const { scrapeMultipleKeywords } = require("./scrapers/crowdworks");
 const { saveJobs, updateAiScores } = require("./db/supabase");
 const { judgeJobs } = require("./ai/judge");
+const { filterJobs } = require("./filters/jobFilter");
 
 // ─── スクレイプ対象キーワード ──────────────────────────────────
 const KEYWORDS = [
@@ -35,8 +36,12 @@ async function run() {
     const jobs = await scrapeMultipleKeywords(KEYWORDS, PAGES_PER_KEYWORD);
     console.log(`\n[NORIKA] スクレイプ完了: ${jobs.length}件`);
 
+    // 1.5 地雷案件を保存前に除外
+    const filtered = filterJobs(jobs);
+    console.log(`[NORIKA] フィルタ後: ${filtered.length}件`);
+
     // 2. Supabaseに保存（新規のみ追加・既存はスキップ）
-    const { newJobs } = await saveJobs(jobs);
+    const { newJobs } = await saveJobs(filtered);
     console.log(`[NORIKA] 新規案件: ${newJobs.length}件`);
 
     // 3. 新規案件だけAIに判定させる
